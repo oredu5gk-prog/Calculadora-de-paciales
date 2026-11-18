@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Promedio de Parciales</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #ffffff; display: flex; flex-direction: column; min-height: 100vh; }
+
+    .aviso-superior { background-color: #000000; color: #ffffff; text-align: center; padding: 12px 16px; font-size: 0.85rem; font-weight: 600; }
+
+    .contenedor-principal { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; }
+
+    .calculadora { background-color: #4dd0e1; width: 100%; max-width: 440px; padding: 32px 28px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .calculadora h2 { text-align: center; color: #111111; margin-bottom: 24px; font-size: 1.45rem; }
+
+    .campo { margin-bottom: 18px; }
+    .campo label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: #1b3b42; font-weight: 500; }
+    .campo input { width: 100%; padding: 10px 12px; font-size: 1rem; border: 2px solid transparent; border-radius: 6px; outline: none; background-color: #ffffff; }
+    .campo input:focus { border-color: #00838f; }
+    .campo input.invalido { border-color: #d32f2f; }
+    .oculto { display: none; }
+
+    .resultado { margin-top: 22px; padding: 20px 16px; border-radius: 8px; text-align: center; transition: background-color 0.3s ease; }
+    .resultado.aprobado { background-color: #7ee369; color: #14360d; }
+    .resultado.final    { background-color: #f6d51f; color: #4a3b00; }
+    .resultado.extra    { background-color: #ff8a80; color: #4a0d0d; }
+
+    .resultado p { margin: 4px 0; font-size: 0.95rem; font-weight: 600; }
+    .estado { margin-top: 8px !important; font-size: 1.05rem !important; font-weight: 700 !important; }
+
+    .mensaje-extra { margin-top: 16px; font-size: 0.9rem; line-height: 1.4; }
+    .mensaje-extra strong { display: block; font-size: 0.95rem; margin-bottom: 6px; }
+    .mensaje-extra ul { text-align: left; margin: 8px 0 0 18px; }
+    .mensaje-extra li { margin-bottom: 6px; font-weight: 400; }
+    .nota { display: block; margin-top: 10px; font-size: 0.8rem; font-weight: 600; }
+
+    .otra { margin-top: 14px; background: rgba(255,255,255,0.6); border: none; border-radius: 6px; padding: 6px 12px; font-size: 0.8rem; cursor: pointer; color: inherit; font-weight: 600; }
+    .otra:hover { background: rgba(255,255,255,0.9); }
+
+    .resultado.aprobado { cursor: pointer; }
+    .pista { display: block; margin-top: 8px; font-size: 0.75rem; font-weight: 400; opacity: 0.8; }
+
+    .aviso-redondeo { margin-top: 12px; padding: 10px 12px; background: #ffffff; color: #4a0d0d; border-left: 5px solid #f6d51f; border-radius: 6px; text-align: left; font-size: 0.82rem; line-height: 1.4; }
+    .aviso-redondeo b { display: block; margin-bottom: 2px; }
+
+    #confeti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+  </style>
+</head>
+<body>
+
+  <canvas id="confeti"></canvas>
+
+  <header class="aviso-superior">
+    La presente herramienta solo es informativa para corroborar tus calificaciones oficiales. Verifica tu portal de alumno de Servicios Escolares.
+  </header>
+
+  <main class="contenedor-principal">
+    <div class="calculadora">
+      <h2>Promedio de Parciales</h2>
+
+      <div class="campo">
+        <label for="parcial1">Calificación Primer Parcial (0-10):</label>
+        <input type="number" id="parcial1" min="0" max="10" step="0.1" placeholder="Ej. 8.5" inputmode="decimal" />
+      </div>
+
+      <div class="campo">
+        <label for="parcial2">Calificación Segundo Parcial (0-10):</label>
+        <input type="number" id="parcial2" min="0" max="10" step="0.1" placeholder="Ej. 7.5" inputmode="decimal" />
+      </div>
+
+      <div class="campo oculto" id="campoFinal">
+        <label for="examenFinal">Calificación Examen Final (0-10):</label>
+        <input type="number" id="examenFinal" min="0" max="10" step="0.1" placeholder="Ej. 7.0" inputmode="decimal" />
+      </div>
+
+      <div class="resultado oculto" id="cajaResultado" aria-live="polite">
+        <p id="sumaTexto"></p>
+        <p id="promedioTexto"></p>
+        <p class="estado" id="estadoTexto"></p>
+        <div class="mensaje-extra" id="mensajeExtra"></div>
+        <button class="otra" id="btnOtra" type="button">🔄 Otro mensaje</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ===== FELICITACIONES (exentan o aprueban con el final) =====
+    const felicitaciones = {
+      diez: [
+        "¡Perfección total! Tu dedicación habla por ti. 🏆",
+        "¡10! Eres ejemplo de constancia y esfuerzo. 🌟",
+        "¡Lo lograste de forma impecable! Disfruta este logro. 🎓"
+      ],
+      nueve: [
+        "¡Excelente trabajo! Tu esfuerzo dio grandes frutos. 🌟",
+        "¡Brillante! Se nota que te comprometiste de verdad. ✨",
+        "¡Qué gran semestre! Sigue con esa actitud. 🚀",
+        "¡Felicidades! Tu disciplina te trajo hasta aquí. 👏"
+      ],
+      ocho: [
+        "¡Felicidades! Te ganaste este descanso. 🎉",
+        "¡Lo hiciste! Tu constancia valió la pena. 💪",
+        "¡Muy bien! Cerraste el semestre con el pie derecho. 👣",
+        "¡Bravo! Demostraste que sí se puede. 🙌",
+        "¡Meta cumplida! Siéntete orgulloso(a) de tu esfuerzo. 🥳"
+      ],
+      conFinal: [
+        "¡Lo lograste! Tu esfuerzo en el examen final rindió frutos. 🎉",
+        "¡Felicidades! Supiste levantarte y cerrar con éxito. 💪",
+        "¡Bien hecho! Demostraste que no te rindes. 🙌",
+        "¡Aprobaste! Que este logro te impulse el próximo semestre. 🚀"
+      ]
+    };
+
+    // ===== FRASES MOTIVADORAS (6.0 a 7.9, presentan examen final) =====
+    const motivacionFinal = {
+      "6.0-6.4": [
+        "Aún tienes el control: el examen final es tu oportunidad de demostrar lo que sabes.",
+        "Cada hora de estudio cuenta. ¡Empieza hoy, no mañana!",
+        "No es el final del camino, es tu momento de remontar."
+      ],
+      "6.5-6.9": [
+        "Vas por buen camino; con un buen repaso puedes cerrar con fuerza.",
+        "Ya tienes una base: ahora enfócate en los temas que más se te dificultan.",
+        "La constancia de estos días hará la diferencia. ¡Tú puedes!"
+      ],
+      "7.0-7.4": [
+        "Estás cerca de la meta: un último esfuerzo y lo consigues.",
+        "Confía en lo que ya aprendiste y refuérzalo con un buen repaso.",
+        "Tienes lo necesario para salir adelante. ¡Prepárate con calma!"
+      ],
+      "7.5-7.9": [
+        "¡Te faltó muy poco! Usa ese impulso para brillar en el final.",
+        "Estuviste a un paso de exentar: demuestra en el final todo lo que sabes.",
+        "Tu esfuerzo se nota. Un repaso más y cierras el semestre con éxito."
+      ]
+    };
+
+    // ===== TIPS DE ESTUDIO (extraordinario / título de suficiencia) =====
+    const tipsEstudio = [
+      "Pide a tu docente la guía o los temas que vendrán en la evaluación.",
+      "Estudia en bloques de 25 minutos con 5 de descanso (técnica Pomodoro).",
+      "Haz resúmenes o mapas mentales con tus propias palabras.",
+      "Explícale un tema a alguien más: si puedes enseñarlo, lo entendiste.",
+      "Resuelve ejercicios y exámenes anteriores, no solo leas.",
+      "Organiza un calendario de estudio y empieza por los temas más difíciles.",
+      "Estudia en un lugar sin distracciones y deja el celular lejos.",
+      "Duerme bien antes de la evaluación: el descanso ayuda a recordar.",
+      "Forma un equipo de estudio con compañeros comprometidos.",
+      "Anota tus dudas y resuélvelas con tu docente antes del examen."
+    ];
+
+    let ultimo = "";
+    function azar(lista) {
+      let elegido;
+      do { elegido = lista[Math.floor(Math.random() * lista.length)]; } while (lista.length > 1 && elegido === ultimo);
+      ultimo = elegido;
+      return elegido;
+    }
+    function variosAzar(lista, n) {
+      const c = [...lista];
+      for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; }
+      return c.slice(0, n);
+    }
+    function rangoFinal(p) {
+      if (p < 6.5) return "6.0-6.4";
+      if (p < 7.0) return "6.5-6.9";
+      if (p < 7.5) return "7.0-7.4";
+      return "7.5-7.9";
+    }
+    function felicitacionPorNota(p) {
+      return azar(p >= 10 ? felicitaciones.diez : p >= 9 ? felicitaciones.nueve : felicitaciones.ocho);
+    }
+    function bloqueTips() {
+      const tips = variosAzar(tipsEstudio, 3).map(t => "<li>" + t + "</li>").join("");
+      return "<strong>No te rindas: todavía puedes acreditar. Estos tips te pueden ayudar 📚</strong>" +
+             "<ul>" + tips + "</ul>" +
+             "<span class='nota'>Recuerda: tu asistencia es el requisito principal para tener derecho a evaluación. Verifícala con tu docente.</span>";
+    }
+    function leer(id) {
+      const input = document.getElementById(id);
+      if (input.value === "") { input.classList.remove("invalido"); return null; }
+      const v = parseFloat(input.value);
+      const ok = !isNaN(v) && v >= 0 && v <= 10;
+      input.classList.toggle("invalido", !ok);
+      return ok ? v : null;
+    }
+    const r2 = x => Math.round(x * 100) / 100;
+
+    // ===== AVISO DE REDONDEO (5.90 a 5.99) =====
+    function avisoRedondeo(prom) {
+      if (prom >= 5.9 && prom < 6) {
+        return "<div class='aviso-redondeo'><b>📌 Importante: verifica con Control Escolar</b>" +
+               "Tu promedio es " + prom.toFixed(2) + ". Es posible que el sistema lo redondee a 6.0, " +
+               "lo cual cambiaría tu situación. Ya ha sucedido en otros casos. " +
+               "Revisa tu portal de alumno o acude a Control Escolar para confirmar tu calificación oficial.</div>";
+      }
+      return "";
+    }
+
+    // ===== CONFETI =====
+    const lienzo = document.getElementById("confeti");
+    const ctx = lienzo.getContext("2d");
+    let piezas = [];
+    let animando = false;
+    const colores = ["#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93", "#ff924c", "#ffffff"];
+
+    function lanzarConfeti() {
+      lienzo.width = window.innerWidth;
+      lienzo.height = window.innerHeight;
+      const caja = document.getElementById("cajaResultado").getBoundingClientRect();
+      const ox = caja.left + caja.width / 2;
+      const oy = caja.top + caja.height / 2;
+      for (let i = 0; i < 160; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const vel = 4 + Math.random() * 9;
+        piezas.push({
+          x: ox, y: oy,
+          vx: Math.cos(ang) * vel,
+          vy: Math.sin(ang) * vel - 6,
+          w: 6 + Math.random() * 6,
+          h: 8 + Math.random() * 8,
+          rot: Math.random() * Math.PI,
+          vr: (Math.random() - 0.5) * 0.3,
+          color: colores[Math.floor(Math.random() * colores.length)],
+          vida: 0
+        });
+      }
+      if (!animando) { animando = true; requestAnimationFrame(animar); }
+    }
+
+    function animar() {
+      ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+      piezas.forEach(p => {
+        p.vy += 0.25; p.vx *= 0.99;
+        p.x += p.vx; p.y += p.vy;
+        p.rot += p.vr; p.vida++;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - p.vida / 160);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      piezas = piezas.filter(p => p.y < lienzo.height + 40 && p.vida < 160);
+      if (piezas.length) requestAnimationFrame(animar);
+      else { animando = false; ctx.clearRect(0, 0, lienzo.width, lienzo.height); }
+    }
+
+    let estadoAnterior = "";
+    function celebrarSiCambio(nuevoEstado) {
+      if (nuevoEstado === "aprobado" && estadoAnterior !== "aprobado") lanzarConfeti();
+      estadoAnterior = nuevoEstado;
+    }
+    const pista = "<span class='pista'>🎊 Toca aquí para celebrar otra vez</span>";
+
+    function calcular() {
+      const p1 = leer("parcial1");
+      const p2 = leer("parcial2");
+      const caja = document.getElementById("cajaResultado");
+      const campoFinal = document.getElementById("campoFinal");
+      const suma = document.getElementById("sumaTexto");
+      const prom = document.getElementById("promedioTexto");
+      const estado = document.getElementById("estadoTexto");
+      const extra = document.getElementById("mensajeExtra");
+      const btn = document.getElementById("btnOtra");
+
+      if (p1 === null || p2 === null) {
+        caja.classList.add("oculto");
+        campoFinal.classList.add("oculto");
+        estadoAnterior = "";
+        return;
+      }
+      caja.classList.remove("oculto");
+      btn.style.display = "inline-block";
+
+      const s = p1 + p2;
+      const p = r2(s / 2);
+
+      // ----- Exento -----
+      if (p >= 8) {
+        campoFinal.classList.add("oculto");
+        caja.className = "resultado aprobado";
+        suma.textContent = "Suma parciales: " + s.toFixed(1);
+        prom.textContent = "Promedio: " + p.toFixed(2);
+        estado.textContent = "🎉 ¡Aprobado! Exentas el examen final.";
+        extra.innerHTML = "<strong>" + felicitacionPorNota(p) + "</strong>" + pista;
+        celebrarSiCambio("aprobado");
+        return;
+      }
+
+      // ----- Extraordinario / título directo -----
+      if (p < 6) {
+        campoFinal.classList.add("oculto");
+        caja.className = "resultado extra";
+        suma.textContent = "Suma parciales: " + s.toFixed(1);
+        prom.textContent = "Promedio: " + p.toFixed(2);
+        estado.textContent = "❌ Presentas extraordinario o título de suficiencia.";
+        extra.innerHTML = avisoRedondeo(p) + bloqueTips();
+        celebrarSiCambio("extra");
+        return;
+      }
+
+      // ----- Presenta examen final (6.0 a 7.9) -----
+      campoFinal.classList.remove("oculto");
+      const ef = leer("examenFinal");
+
+      if (ef === null) {
+        caja.className = "resultado final";
+        suma.textContent = "Suma parciales: " + s.toFixed(1);
+        prom.textContent = "Promedio: " + p.toFixed(2);
+        estado.textContent = "⚠️ Presentas examen final. Ingresa tu calificación.";
+        extra.innerHTML = "<strong>" + azar(motivacionFinal[rangoFinal(p)]) + "</strong>";
+        celebrarSiCambio("final");
+        return;
+      }
+
+      const s3 = s + ef;
+      const pf = r2(s3 / 3);
+      suma.textContent = "Suma de las tres evaluaciones: " + s3.toFixed(1);
+      prom.textContent = "Promedio Final: " + pf.toFixed(2);
+
+      if (pf >= 6) {
+        caja.className = "resultado aprobado";
+        estado.textContent = "🎉 ¡Aprobaste la materia!";
+        extra.innerHTML = "<strong>" + azar(felicitaciones.conFinal) + "</strong>" + pista;
+        celebrarSiCambio("aprobado");
+      } else {
+        caja.className = "resultado extra";
+        estado.textContent = "❌ Presentas extraordinario o título de suficiencia.";
+        extra.innerHTML = avisoRedondeo(pf) + bloqueTips();
+        celebrarSiCambio("extra");
+      }
+    }
+
+    ["parcial1", "parcial2", "examenFinal"].forEach(id =>
+      document.getElementById(id).addEventListener("input", calcular));
+    document.getElementById("btnOtra").addEventListener("click", e => { e.stopPropagation(); calcular(); });
+    document.getElementById("cajaResultado").addEventListener("click", () => {
+      if (document.getElementById("cajaResultado").classList.contains("aprobado")) lanzarConfeti();
+    });
+    calcular();
+  </script>
+</body>
+</html>
